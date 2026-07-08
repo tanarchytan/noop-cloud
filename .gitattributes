@@ -1,0 +1,18 @@
+# CRLF policy for this repo: every text file is stored and checked out with LF, on every OS.
+# This is the canonical cross-platform setting — combined with `core.autocrlf=false` (repo config),
+# nothing ever gets CRLF, so a Windows checkout can't hand the Linux container a CRLF entrypoint.sh
+# ("/usr/bin/env: bash\r" / "exec format error").
+* text=auto eol=lf
+
+# Belt-and-suspenders for the files that MUST be LF to run in a container.
+*.sh        text eol=lf
+*.py        text eol=lf
+*.conf      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+Dockerfile  text eol=lf
+
+# Binaries: never touched.
+*.png binary
+*.jpg binary
+*.ico binary

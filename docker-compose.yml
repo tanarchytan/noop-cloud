@@ -1,0 +1,59 @@
+# noop-cloud — MVP: the firmware update-check service, as ONE small Alpine image.
+# `docker compose up -d --build` → http://localhost:8088/firmware/latest.json
+#
+# Two services: `firmware` (scrapes WHOOP release notes → firmware-latest.json) and `api` (Fastify/Node:
+# pairing, metrics sync, AI coach, and the React dashboard). SQLite storage; no external database.
+services:
+  firmware:
+    build: ./firmware
+    image: noop-cloud-firmware:latest
+    ports:
+      - "8088:80"                        # http://<host>:8088/firmware/latest.json
+    environment:
+      SCRAPE_INTERVAL_SECONDS: "43200"   # re-check the release notes every 12h
+    volumes:
+      - firmware-data:/data              # persists the last scraped JSON across restarts
+    restart: unless-stopped
+
+  # Device-pairing API + web dashboard + sync + AI coach. Link the noop app with a rotating code
+  # (RFC 8628 device grant); manage users and view metrics in the browser.
+  api:
+    build: ./api-node                    # Fastify/Node LTS + the React dashboard
+    image: noop-cloud-api:latest
+    ports:
+      # LOCALHOST-ONLY BY DEFAULT: bound to 127.0.0.1 so a fresh cloud can't be reached over the LAN
+      # before you've set an admin password. After first-run setup, set API_BIND=0.0.0.0 in .env and
+      # re-run `docker compose up -d` to let your phone reach it for pairing/sync.
+      - "${API_BIND:-127.0.0.1}:8089:80"
+      # App-link HTTPS (self-signed, pinned by the app). Bound to the LAN so your phone can reach it;
+      # only active when TLS_ENABLED=1. The browser dashboard keeps using plain http on :8089/localhost.
+      - "${TLS_BIND:-0.0.0.0}:8443:443"
+    environment:
+      # REQUIRED — the trust anchor for approving a device. Change it; keep it secret.
+      PAIR_ADMIN_PIN: "${PAIR_ADMIN_PIN:-change-me}"
+      PAIR_CODE_TTL_SECONDS: "300"       # the rotating code is valid 5 min
+      # Set TLS_ENABLED=1 to serve the app link over self-signed HTTPS on :8443 (app pins the cert).
+      TLS_ENABLED: "${TLS_ENABLED:-}"
+      # Cert signature algorithm: ec (default, universal) · rsa · mldsa65 (post-quantum — verify your
+      # device's TLS can do ML-DSA before enabling, else the app can't complete the handshake).
+      CERT_ALG: "${CERT_ALG:-ec}"
+      # Set MTLS_REQUIRED=1 to also require the app's mutual-TLS client cert on data routes (hardened).
+      MTLS_REQUIRED: "${MTLS_REQUIRED:-}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      # Forgotten admin password: set FORGOT_PASSWORD=1 (+ optional ADMIN_RESET_PASSWORD) and restart.
+      FORGOT_PASSWORD: "${FORGOT_PASSWORD:-}"
+      ADMIN_RESET_PASSWORD: "${ADMIN_RESET_PASSWORD:-}"
+      # AI coach (the AI parts live here). UNIVERSAL: point AI_BASE_URL at any OpenAI-compatible
+      # provider (OpenAI, OpenRouter, Groq, a local Ollama http://host:11434/v1, …). Cloud mode in
+      # the app uses these — none of the app's local AI settings.
+      AI_BASE_URL: "${AI_BASE_URL:-https://api.openai.com/v1}"
+      AI_API_KEY: "${AI_API_KEY:-}"
+      AI_MODEL: "${AI_MODEL:-gpt-4o-mini}"
+    volumes:
+      - api-data:/data                   # SQLite pairing/token store, persists across restarts
+      - firmware-data:/firmware-data:ro  # read the scraper's firmware-latest.json to re-serve it
+    restart: unless-stopped
+
+volumes:
+  firmware-data:
+  api-data:

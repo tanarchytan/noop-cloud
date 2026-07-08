@@ -1,0 +1,12 @@
+# Local env / secrets
+.env
+*.env
+# Python
+__pycache__/
+*.pyc
+# Scraper runtime output (regenerated); the seed firmware/firmware-latest.json IS tracked
+/data/
+
+# Node
+node_modules/
+dist/
