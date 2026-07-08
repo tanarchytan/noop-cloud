@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type DailyMetrics } from "../api.js";
+import { api, type BpLatest, type DailyMetrics } from "../api.js";
 import { Ring, recoveryColor } from "../components/Ring.js";
 
 const fmt = (v: number | null, suffix = "") => (v == null ? "—" : `${v}${suffix}`);
@@ -8,11 +8,16 @@ const fmt1 = (v: number | null) => (v == null ? "—" : (+v).toFixed(1));
 /** Today's score stack: Recovery / Sleep / Strain rings + secondary vitals. */
 export function Home() {
   const [m, setM] = useState<DailyMetrics | null>(null);
+  const [bp, setBp] = useState<BpLatest | null>(null);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     api.today().then(setM).catch((e) => setErr(String(e.message)));
+    api.bp().then(setBp).catch(() => {});
   }, []);
+
+  const bpText = bp?.latest ? `${bp.latest.systolic}/${bp.latest.diastolic}`
+    : bp?.calibrated ? "—" : "not set up";
 
   return (
     <div>
@@ -29,6 +34,8 @@ export function Home() {
         <Metric k="HRV" v={m?.hrv != null ? (+m.hrv).toFixed(0) : "—"} p="ms" />
         <Metric k="Respiratory" v={fmt(m?.respiratory ?? null)} p="rpm" />
         <Metric k="SpO₂" v={fmt(m?.spo2 ?? null)} p="%" />
+        <Metric k="Blood pressure" v={bpText}
+          p={bp?.latest ? `est · ${Math.round((bp.latest.confidence ?? 0) * 100)}% conf` : "experimental"} />
       </div>
       <p className="mut">
         {err ? `Error: ${err}` : m?.synced_at

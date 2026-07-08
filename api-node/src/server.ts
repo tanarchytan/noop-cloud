@@ -11,6 +11,7 @@ import { db } from "./db.js";
 import * as auth from "./auth.js";
 import * as links from "./links.js";
 import * as metrics from "./metrics.js";
+import * as bp from "./bp.js";
 import * as pairing from "./pairing.js";
 import * as ratelimit from "./ratelimit.js";
 import * as tls from "./tls.js";
@@ -23,6 +24,7 @@ import { authRoutes } from "./routes/auth-routes.js";
 import { usersRoutes } from "./routes/users.js";
 import { pairingRoutes } from "./routes/pairing.js";
 import { metricsRoutes } from "./routes/metrics-routes.js";
+import { bpRoutes } from "./routes/bp.js";
 import { coachRoutes } from "./routes/coach.js";
 import { firmwareRoutes } from "./routes/firmware.js";
 
@@ -33,6 +35,7 @@ async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(usersRoutes);
   await app.register(pairingRoutes);
   await app.register(metricsRoutes);
+  await app.register(bpRoutes);
   await app.register(coachRoutes);
   await app.register(firmwareRoutes);
 }
@@ -51,7 +54,7 @@ async function buildApp(https?: tls.ServerTlsOptions): Promise<FastifyInstance> 
       info: { title: "noop-cloud API", version: "1.0.0", description: "Self-hosted WHOOP-companion cloud." },
       tags: [
         { name: "auth" }, { name: "users" }, { name: "pairing" }, { name: "metrics" },
-        { name: "coach" }, { name: "firmware" },
+        { name: "bp" }, { name: "coach" }, { name: "firmware" },
       ],
     },
   });
@@ -96,6 +99,7 @@ async function main(): Promise<void> {
   links.ensureSchema(d);
   pairing.ensureSchema(d);
   ratelimit.ensureSchema(d);
+  bp.ensureSchema(d);
   initSecret(d);
   auth.seedAdmin(d);
   if (auth.maybeEnvReset(d)) log.warn("admin.reset", { reason: "FORGOT_PASSWORD" });

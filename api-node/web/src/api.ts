@@ -26,8 +26,15 @@ function jsonInit(method: string, data: unknown): RequestInit {
   return { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) };
 }
 
+export interface BpLatest {
+  calibrated: boolean;
+  calibration: { systolic: number; diastolic: number } | null;
+  latest: { systolic: number; diastolic: number; confidence: number; ts: number } | null;
+}
+
 export const api = {
   session: () => req<Session>("/api/session"),
+  bp: () => req<BpLatest>("/api/bp/latest"),
   logout: () => fetch("/api/logout", { method: "POST", credentials: "same-origin" }),
   today: () => req<DailyMetrics>("/api/metrics/today"),
   history: (days = 30) => req<HistoryResponse>(`/api/metrics/history?days=${days}`),

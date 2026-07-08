@@ -7,6 +7,20 @@ import * as links from "./links.js";
 import * as metrics from "./metrics.js";
 import * as jwt from "./jwt.js";
 import * as ratelimit from "./ratelimit.js";
+import * as bp from "./bp.js";
+
+/** A synthetic PPG window at [hr] bpm, [fs] Hz, [secs] long: fast upstroke + slow decay per beat. */
+function syntheticPpg(hr: number, fs: number, secs: number): number[] {
+  const period = (60 / hr) * fs;
+  const out: number[] = [];
+  for (let i = 0; i < fs * secs; i++) {
+    const p = (i % period) / period; // 0..1 within a beat
+    // fast rise to ~0.25, exponential decay after — a plausible PPG pulse shape.
+    const v = p < 0.25 ? p / 0.25 : Math.exp(-(p - 0.25) * 4);
+    out.push(2000 + Math.round(v * 800)); // DC + pulsatile, ADC-like
+  }
+  return out;
+}
 
 /** Fresh in-memory DB with every module's schema applied — the unit-test harness. */
 function freshDb(): Database.Database {
@@ -110,4 +124,29 @@ test("link is bound to its client id at pairing", () => {
   const d = freshDb();
   const [linkId] = links.issueLink(d, "NOOP-X", "androidABC:strap123");
   assert.equal(links.linkClientId(d, linkId), "androidABC:strap123");
+});
+
+test("bp: extract PPG features recovers heart rate", () => {
+  const f = bp.extractFeatures(syntheticPpg(60, 24, 8), 24);
+  assert.ok(f, "features extracted");
+  assert.ok(Math.abs(f!.hr - 60) < 6, `hr ~60, got ${f!.hr}`);
+  assert.ok(f!.pulses >= 4);
+});
+
+test("bp: calibrate then estimate returns clamped SBP/DBP relative to the cuff", () => {
+  const d = freshDb();
+  bp.ensureSchema(d);
+  const calF = bp.extractFeatures(syntheticPpg(60, 24, 8), 24)!;
+  bp.calibrate(d, 120, 80, calF); // cuff reading at rest
+  // same signal → estimate should sit at (near) the calibration point.
+  const est = bp.estimate(d, bp.extractFeatures(syntheticPpg(60, 24, 8), 24)!);
+  assert.ok(est, "estimate produced");
+  assert.ok(est!.systolic >= 80 && est!.systolic <= 200);
+  assert.ok(Math.abs(est!.systolic - 120) < 10, `SBP near calibration 120, got ${est!.systolic}`);
+});
+
+test("bp: estimate before calibration returns null", () => {
+  const d = freshDb();
+  bp.ensureSchema(d);
+  assert.equal(bp.estimate(d, bp.extractFeatures(syntheticPpg(70, 24, 8), 24)!), null);
 });
