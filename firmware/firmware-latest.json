@@ -1,0 +1,15 @@
+{
+  "maverick": {
+    "version": "50.40.1.0",
+    "label": "WHOOP 5.0 / MG",
+    "notes_url": "https://support.whoop.com/s/article/WHOOP-5-0-MG-Firmware-Release-Notes?language=en_US"
+  },
+  "harvard": {
+    "version": "41.17.4.0",
+    "label": "WHOOP 4.0",
+    "notes_url": "https://support.whoop.com/s/article/WHOOP-4-0-Firmware-Release-Notes?language=en_US"
+  },
+  "scraped_at": "2026-07-07T00:00:00Z",
+  "ok": true,
+  "_seed": "hand-seeded from known-latest (WHOOP 5.0/MG band read 50.40.1.0; HARVARD newest in archive 41.17.4.0). The scraper overwrites this on first successful run."
+}
