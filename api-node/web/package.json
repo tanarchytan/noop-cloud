@@ -1,0 +1,22 @@
+{
+  "name": "noop-cloud-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "noop-cloud dashboard — Vite/React SPA served at /app by the Fastify backend.",
+  "scripts": {
+    "build": "tsc -b && vite build",
+    "dev": "vite"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.11"
+  }
+}

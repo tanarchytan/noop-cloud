@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/api.ts","./src/main.tsx","./src/components/ring.tsx","./src/tabs/admin.tsx","./src/tabs/coach.tsx","./src/tabs/devices.tsx","./src/tabs/health.tsx","./src/tabs/home.tsx","./src/tabs/settings.tsx"],"version":"5.9.3"}
