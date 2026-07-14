@@ -46,8 +46,19 @@ test("seedAdmin creates admin/admin must_change; isUnconfigured true until passw
   assert.equal(auth.isUnconfigured(d), true);
   const u = auth.authenticate(d, "admin", "admin");
   assert.ok(u && u.is_admin && u.must_change);
-  auth.setPassword(d, "admin", "real-pw");
+  auth.setPassword(d, "admin", "a3f-9km-2xz");
   assert.equal(auth.isUnconfigured(d), false);
+});
+
+test("password policy: xxx-xxx-xxx (3 groups of 3 alnum) only", () => {
+  assert.equal(auth.isValidPassword("abc-def-ghi"), true);
+  assert.equal(auth.isValidPassword("A3f-9Km-2xZ"), true);
+  assert.equal(auth.isValidPassword("abc-def-ghi "), true); // trimmed
+  assert.equal(auth.isValidPassword("abcdefghi"), false); // no hyphens
+  assert.equal(auth.isValidPassword("ab-def-ghi"), false); // wrong group size
+  assert.equal(auth.isValidPassword("abc-def"), false); // too few groups
+  assert.equal(auth.isValidPassword("ab!-def-ghi"), false); // non-alphanumeric
+  assert.equal(auth.isValidPassword("real-pw"), false);
 });
 
 test("sessions round-trip and expire-delete", () => {
@@ -60,11 +71,12 @@ test("sessions round-trip and expire-delete", () => {
   assert.equal(auth.sessionUser(d, tok), null);
 });
 
-test("createUser rejects short password + duplicate username", () => {
+test("createUser rejects mis-formatted password + duplicate username", () => {
   const d = freshDb();
   assert.throws(() => auth.createUser(d, "bob", "xy"), auth.ValueError);
-  auth.createUser(d, "bob", "goodpw");
-  assert.throws(() => auth.createUser(d, "bob", "goodpw")); // UNIQUE constraint
+  assert.throws(() => auth.createUser(d, "bob", "goodpassword"), auth.ValueError); // no xxx-xxx-xxx shape
+  auth.createUser(d, "bob", "abc-def-ghi");
+  assert.throws(() => auth.createUser(d, "bob", "abc-def-ghi")); // UNIQUE constraint
 });
 
 test("jwt access token verifies and rejects tamper", () => {

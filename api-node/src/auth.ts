@@ -20,6 +20,18 @@ const N = 16384, R = 8, P = 1, DKLEN = 32;
 export const SESSION_TTL = Number(process.env.SESSION_TTL_SECONDS ?? String(30 * 24 * 3600));
 const DEFAULT_ADMIN_PW = "admin";
 
+/**
+ * Password policy: three groups of three letters/digits, hyphen-separated — `xxx-xxx-xxx`
+ * (e.g. `a3f-9km-2xz`). 9 alphanumerics ≈ 53 bits, easy to read/transcribe off a screen. The
+ * default-admin seed + env reset bypass this (they force must_change), so the first real password
+ * the owner sets is the first one this gate sees.
+ */
+const PASSWORD_RE = /^[A-Za-z0-9]{3}-[A-Za-z0-9]{3}-[A-Za-z0-9]{3}$/;
+export const PASSWORD_HINT = "password must be 3 groups of 3 letters or digits, like abc-def-ghi (xxx-xxx-xxx)";
+export function isValidPassword(pw: string | undefined | null): boolean {
+  return PASSWORD_RE.test((pw ?? "").trim());
+}
+
 export interface User {
   id: number;
   username: string;
@@ -110,14 +122,16 @@ export function createUser(
 ): void {
   const name = (username ?? "").trim();
   if (!name) throw new ValueError("username required");
-  if ((password ?? "").length < 4) throw new ValueError("password must be at least 4 characters");
+  const pw = (password ?? "").trim();
+  if (!isValidPassword(pw)) throw new ValueError(PASSWORD_HINT);
   d.prepare("INSERT INTO users(username,pw_hash,is_admin,must_change,created) VALUES(?,?,?,?,?)")
-    .run(name, hashPassword(password), isAdmin ? 1 : 0, mustChange ? 1 : 0, now());
+    .run(name, hashPassword(pw), isAdmin ? 1 : 0, mustChange ? 1 : 0, now());
 }
 
 export function setPassword(d: Database.Database, username: string, newPw: string): void {
-  if ((newPw ?? "").length < 4) throw new ValueError("password must be at least 4 characters");
-  d.prepare("UPDATE users SET pw_hash=?, must_change=0 WHERE username=?").run(hashPassword(newPw), username);
+  const pw = (newPw ?? "").trim();
+  if (!isValidPassword(pw)) throw new ValueError(PASSWORD_HINT);
+  d.prepare("UPDATE users SET pw_hash=?, must_change=0 WHERE username=?").run(hashPassword(pw), username);
 }
 
 export function deleteUser(d: Database.Database, username: string): void {

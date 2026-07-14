@@ -39,16 +39,21 @@ async function doLogin(ev){ev.preventDefault();const e=document.getElementById('
 }
 
 export function changePage(): string {
+  const pat = "[A-Za-z0-9]{3}-[A-Za-z0-9]{3}-[A-Za-z0-9]{3}";
   return page("Set password · noop-cloud", `
 <form class=card id=f onsubmit="return doChange(event)">
   <span class=badge>SET PASSWORD</span><h1>Choose a password</h1>
-  <p class=sub>Pick a real admin password. Until you do, the cloud only answers on localhost.</p>
-  <label>New password</label><input id=p1 type=password autocomplete=new-password minlength=4 autofocus required>
-  <label>Confirm password</label><input id=p2 type=password autocomplete=new-password minlength=4 required>
+  <p class=sub>Format: three groups of three letters or digits — <b>xxx-xxx-xxx</b>. Until you set one, the cloud only answers on localhost.</p>
+  <label>New password</label><input id=p1 autocomplete=new-password placeholder="xxx-xxx-xxx" pattern="${pat}" maxlength=11 title="Three groups of three letters or digits, e.g. a3f-9km-2xz" autofocus required>
+  <label>Confirm password</label><input id=p2 type=password autocomplete=new-password placeholder="xxx-xxx-xxx" pattern="${pat}" maxlength=11 required>
+  <button type=button id=g style="background:#1c2a2e;color:var(--teal);margin-top:.75rem">Generate a strong one</button>
   <button type=submit>Save &amp; continue</button><div class=err id=e></div>
 </form>
 <script>
+var RE=/^${pat}$/;
+document.getElementById('g').onclick=function(){var a='abcdefghjkmnpqrstuvwxyz23456789',b=new Uint32Array(9),s='';crypto.getRandomValues(b);for(var i=0;i<9;i++){s+=a[b[i]%a.length];if(i===2||i===5)s+='-';}p1.value=p2.value=s;p1.type=p2.type='text';};
 async function doChange(ev){ev.preventDefault();const e=document.getElementById('e');e.textContent='';
+ if(!RE.test(p1.value)){e.textContent='use xxx-xxx-xxx — 3 groups of 3 letters or digits';return false;}
  if(p1.value!==p2.value){e.textContent='passwords do not match';return false;}
  const r=await fetch('/api/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({new_password:p1.value})});
  const j=await r.json().catch(()=>({}));if(!r.ok){e.textContent=j.error||'could not set password';return false;}

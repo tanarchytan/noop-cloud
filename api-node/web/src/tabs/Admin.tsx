@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type UserRow } from "../api.js";
+import { api, isValidPassword, PASSWORD_HINT, type UserRow } from "../api.js";
 
 /** Admin-only user management (add / list / delete). */
 export function Admin() {
@@ -14,8 +14,9 @@ export function Admin() {
 
   async function add() {
     setErr("");
+    if (!isValidPassword(np)) { setErr(PASSWORD_HINT); return; }
     try {
-      await api.addUser(nu, np, na);
+      await api.addUser(nu, np.trim(), na);
       setNu(""); setNp(""); setNa(false);
       load();
     } catch (e) { setErr((e as Error).message); }
@@ -46,7 +47,7 @@ export function Admin() {
       <h2>Add user</h2>
       <div className="row">
         <input value={nu} placeholder="username" onChange={(e) => setNu(e.target.value)} />
-        <input value={np} type="password" placeholder="password" onChange={(e) => setNp(e.target.value)} />
+        <input value={np} type="password" placeholder="xxx-xxx-xxx" maxLength={11} onChange={(e) => setNp(e.target.value)} />
         <label className="mut" style={{ display: "flex", alignItems: "center", gap: ".3rem" }}>
           <input type="checkbox" checked={na} style={{ flex: "none" }} onChange={(e) => setNa(e.target.checked)} /> admin
         </label>

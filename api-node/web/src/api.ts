@@ -10,6 +10,11 @@ export interface DailyMetrics {
   provenance: string | null; synced_at: number | null;
 }
 
+/** Password policy (mirror of the server's auth.isValidPassword): xxx-xxx-xxx, 3 groups of 3 alnum. */
+export const PASSWORD_HINT = "password must be 3 groups of 3 letters or digits, like abc-def-ghi (xxx-xxx-xxx)";
+export const isValidPassword = (pw: string): boolean =>
+  /^[A-Za-z0-9]{3}-[A-Za-z0-9]{3}-[A-Za-z0-9]{3}$/.test((pw ?? "").trim());
+
 export interface HistoryResponse { days: DailyMetrics[]; hr: Array<{ ts: number; bpm: number }> }
 export interface UserRow { username: string; is_admin: number; must_change: number; created: number }
 export interface PendingPairing { user_code: string; client_id: string | null; created: number }
