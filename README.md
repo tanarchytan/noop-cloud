@@ -37,10 +37,16 @@ The app only ever talks to **your** cloud. Not affiliated with WHOOP. Own-device
 
 Built for exposing a personal service on a home network — safely.
 
-- **First-run gate** — default `admin/admin`, forced password change; until a real password is set the
-  cloud only answers on `localhost`.
-- **Auth** — `scrypt` password hashing, server-side sessions, admin-only user management.
-- **Rate-limit + IP ban** — sliding-window on login and pairing with escalating bans (survives restart).
+- **First-run gate** — default `admin/admin`, forced password change; until a real password is set a
+  **remote** client gets liveness only (`/health`, `/api/version`) — setup must happen on `localhost`, so
+  an exposed-before-setup cloud can't be seized with the default password.
+- **Auth** — `scrypt` password hashing, server-side sessions (`httpOnly`, `SameSite=Lax`, `Secure` on
+  https), admin-only user management. `/docs` is localhost- or admin-only.
+- **Rate-limit + IP ban** — sliding-window on login and pairing with escalating bans (survives restart),
+  plus per-link request caps on the AI coach and data routes so a compromised client can't burn the AI
+  key or pin the CPU. A body-size limit bounds each payload.
+- **Response hardening** — `Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options:
+  nosniff`, `Referrer-Policy`, and HSTS on the https path.
 - **Rotating tokens** — 5-minute access **JWT** auto-rotated from an opaque refresh token with a sliding
   8-hour idle window. Refresh **reuse revokes the link** (theft signal). A transient outage doesn't disconnect.
 - **Client binding** — every request carries a unique client id (**device + strap**); a token replayed
@@ -80,6 +86,31 @@ Then:
 4. In the app: **Settings → Cloud** → enter the URL → **Link** → approve the code in the dashboard's
    **Devices** tab (or the `/pair` page with your PIN).
 
+## Exposing to the internet
+
+Reaching your cloud from outside the LAN (port-forwarding). The service has **two listeners with two
+different consumers — expose them differently:**
+
+| Consumer | Listener | How |
+|---|---|---|
+| **Phone app** | `:8443` HTTPS, self-signed | **Direct** port-forward `:8443` (`TLS_ENABLED=1`). The app **pins** the cert — don't proxy it. Turn on `MTLS_REQUIRED=1`. |
+| **Browser dashboard** | `:8089` HTTP (localhost) | **Don't forward `:8089` raw.** Front it with a reverse proxy that terminates a real cert — see [`Caddyfile.example`](Caddyfile.example). |
+
+**Do it in this order:**
+
+1. **Finish setup on `localhost` first** — a strong admin password. (A remote client can't reach the auth
+   surface until this is done, so never skip it.)
+2. Set a **strong `PAIR_ADMIN_PIN`**; keep `API_BIND=127.0.0.1`.
+3. Front the dashboard with **Caddy** (`Caddyfile.example`): real Let's-Encrypt cert, security headers,
+   `/docs` blocked. Set **`TRUST_PROXY=1`** so per-IP rate-limiting and the `Secure` cookie see the real
+   client and scheme.
+4. For the phone, forward **`:8443`** and set **`MTLS_REQUIRED=1`**.
+
+> **Why not one cert for both?** The app pins the self-signed `:8443` cert; a rotating Let's-Encrypt cert
+> (renewed every ~90 days) would break that pin and force a re-link. So the browser gets the real cert via
+> the proxy, and the app keeps its own pinned one. Note: Tailscale/CGNAT `100.x` addresses are *not* treated
+> as LAN, so use `https` even over a VPN.
+
 ## API
 
 `GET /api/version` → `{ service, version, api, min_app_api }` — the app checks `api` for compatibility
@@ -108,6 +139,9 @@ Set in `.env` (see [`.env.example`](.env.example)):
 | `MTLS_REQUIRED` | off | Require the app's mutual-TLS client cert on data routes |
 | `CERT_ALG` | `ec` | `ec` · `rsa` · `mldsa65` (post-quantum — needs an ML-DSA-capable client) |
 | `REQUIRE_CLIENT_ID` | on | Bind a link to its device+strap id and reject replayed tokens |
+| `TRUST_PROXY` | off | Set to `1` **only** behind a reverse proxy (Caddy/nginx) — trusts `X-Forwarded-For/-Proto` |
+| `BODY_LIMIT_BYTES` | `524288` | Max request body size |
+| `COACH_MAX_PER_MIN` / `DATA_MAX_PER_MIN` | `20` / `120` | Per-link request caps on coach and sync/BP |
 | `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL` | OpenAI | Any OpenAI-compatible provider (incl. local Ollama) |
 | `LOG_LEVEL` | `info` | `debug` · `info` · `warn` · `error` |
 

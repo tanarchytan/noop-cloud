@@ -22,6 +22,33 @@ export function ensureSchema(d: Database.Database): void {
        window_start INTEGER NOT NULL, banned_until INTEGER NOT NULL DEFAULT 0,
        PRIMARY KEY (ip, bucket))`,
   );
+  // Sliding-window request counters (distinct from the failure-based ban table above): used to cap the
+  // rate of the authed, cost-/CPU-bearing routes (AI coach, sync, BP) per link so a compromised or
+  // buggy client can't burn the AI key or pin the CPU.
+  d.exec(
+    `CREATE TABLE IF NOT EXISTS req_counts (
+       key TEXT, bucket TEXT, count INTEGER NOT NULL DEFAULT 0, window_start INTEGER NOT NULL,
+       PRIMARY KEY (key, bucket))`,
+  );
+}
+
+/** A request-rate cap: allow up to [max] requests per [windowSec] for [key]/[bucket]. Counts EVERY
+ *  call (not just failures). Returns retryAfter seconds when over the cap. */
+export function throttle(
+  d: Database.Database, key: string, bucket: string, max: number, windowSec: number,
+): Gate {
+  const t = now();
+  const row = d.prepare("SELECT count,window_start FROM req_counts WHERE key=? AND bucket=?")
+    .get(key, bucket) as { count: number; window_start: number } | undefined;
+  const fresh = !row || t - row.window_start >= windowSec;
+  const count = (fresh ? 0 : row!.count) + 1;
+  const windowStart = fresh ? t : row!.window_start;
+  d.prepare(
+    `INSERT INTO req_counts(key,bucket,count,window_start) VALUES(?,?,?,?)
+     ON CONFLICT(key,bucket) DO UPDATE SET count=excluded.count, window_start=excluded.window_start`,
+  ).run(key, bucket, count, windowStart);
+  if (count > max) return { allowed: false, retryAfter: Math.max(1, windowStart + windowSec - t) };
+  return { allowed: true, retryAfter: 0 };
 }
 
 export interface Gate { allowed: boolean; retryAfter: number }

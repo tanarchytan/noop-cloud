@@ -15,8 +15,8 @@ import * as bp from "./bp.js";
 import * as pairing from "./pairing.js";
 import * as ratelimit from "./ratelimit.js";
 import * as tls from "./tls.js";
-import { clientIsLoopback, initSecret, pathOf } from "./security.js";
-import { PORT, SETUP_PATHS, TLS_ENABLED, TLS_PORT } from "./config.js";
+import { clientIsLoopback, currentUser, initSecret, pathOf, setSecurityHeaders } from "./security.js";
+import { BODY_LIMIT, PORT, TLS_ENABLED, TLS_PORT, TRUST_PROXY } from "./config.js";
 import { log } from "./log.js";
 
 import { pagesRoutes } from "./routes/pages.js";
@@ -44,11 +44,14 @@ async function registerRoutes(app: FastifyInstance): Promise<void> {
 async function buildApp(https?: tls.ServerTlsOptions): Promise<FastifyInstance> {
   // One typed options object → a single Fastify() call, so `app` is one concrete instance type (the
   // https branch otherwise widens it to a non-callable union). `https` is still honoured at runtime.
-  const opts: FastifyServerOptions = { logger: false };
+  const opts: FastifyServerOptions = { logger: false, trustProxy: TRUST_PROXY, bodyLimit: BODY_LIMIT };
   if (https) (opts as FastifyServerOptions & { https: tls.ServerTlsOptions }).https = https;
   const app = Fastify(opts);
 
   await app.register(cookie);
+
+  // Baseline security headers on every response (nosniff, anti-clickjacking, CSP, HSTS on https).
+  app.addHook("onRequest", async (req, reply) => setSecurityHeaders(req, reply));
   await app.register(swagger, {
     openapi: {
       info: { title: "noop-cloud API", version: "1.0.0", description: "Self-hosted WHOOP-companion cloud." },
@@ -60,15 +63,24 @@ async function buildApp(https?: tls.ServerTlsOptions): Promise<FastifyInstance> 
   });
   await app.register(swaggerUi, { routePrefix: "/docs" });
 
-  // Setup gate: while unconfigured, non-loopback clients get only the setup surface (defence in depth;
-  // the compose port bind to 127.0.0.1 is the physical enforcement).
+  // Access gate for remote (non-loopback) clients — localhost is always trusted (it's the owner on-box).
   app.addHook("onRequest", async (req, reply) => {
     if (clientIsLoopback(req)) return;
     const p = pathOf(req);
-    if (p.startsWith("/docs")) return;
-    if (auth.isUnconfigured(db()) && !SETUP_PATHS.has(p)) {
-      reply.code(403).send({
-        error: "cloud not set up yet — finish first-run setup (set an admin password) before this cloud will serve anything else",
+
+    // The OpenAPI UI maps the whole attack surface — never anonymous over the internet. Admin session only.
+    if (p === "/docs" || p.startsWith("/docs/")) {
+      const u = currentUser(req);
+      if (!u?.is_admin) return reply.code(404).send({ error: "not found" });
+      return;
+    }
+
+    // First-run lockout: until an admin password is set, a REMOTE client gets liveness only — never the
+    // auth surface. Closes the "exposed before setup" race where admin/admin could be seized remotely.
+    // First-run setup must happen on localhost (as documented). Config completes → this gate lifts.
+    if (auth.isUnconfigured(db()) && p !== "/health" && p !== "/api/version") {
+      return reply.code(403).send({
+        error: "cloud not set up yet — finish first-run setup (set an admin password) on localhost first",
       });
     }
   });

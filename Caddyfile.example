@@ -1,0 +1,39 @@
+# noop-cloud — reverse proxy for the BROWSER DASHBOARD over the public internet.
+#
+# Caddy fetches + auto-renews a real Let's Encrypt cert, terminates TLS, adds security headers, blocks
+# the API docs, and forwards to the container's plain-http listener on localhost. Copy to `Caddyfile`,
+# set your domain + email, run `caddy run` (or use the official caddy Docker image).
+#
+# IMPORTANT — two listeners, two strategies:
+#   • Dashboard (this file): browser → Caddy (real cert) → 127.0.0.1:8089.  Set TRUST_PROXY=1 in .env.
+#   • App link (phone):      app → DIRECT port-forward of :8443 (self-signed, the app PINS it).
+#     Do NOT proxy :8443 through Caddy — a rotating Let's Encrypt cert would break the app's pin.
+#
+# Keep the container's http bind on localhost: API_BIND=127.0.0.1 (the default). Only Caddy is exposed.
+
+{
+	email you@example.com
+}
+
+cloud.example.com {
+	encode zstd gzip
+
+	# The OpenAPI UI maps the whole API surface — never expose it publicly. (The app itself also
+	# refuses /docs to non-admin remotes, so this is belt-and-braces.)
+	@docs path /docs /docs/*
+	respond @docs 404
+
+	# Real client IP + scheme reach the app so per-IP rate-limiting, logging, and the Secure cookie
+	# work correctly. Requires TRUST_PROXY=1 in the container's env.
+	reverse_proxy 127.0.0.1:8089 {
+		header_up X-Forwarded-Proto https
+	}
+
+	header {
+		Strict-Transport-Security "max-age=15552000; includeSubDomains"
+		X-Content-Type-Options    "nosniff"
+		X-Frame-Options           "DENY"
+		Referrer-Policy           "no-referrer"
+		-Server
+	}
+}

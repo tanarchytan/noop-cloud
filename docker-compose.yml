@@ -39,6 +39,13 @@ services:
       CERT_ALG: "${CERT_ALG:-ec}"
       # Set MTLS_REQUIRED=1 to also require the app's mutual-TLS client cert on data routes (hardened).
       MTLS_REQUIRED: "${MTLS_REQUIRED:-}"
+      # Set TRUST_PROXY=1 only when fronting the dashboard with a reverse proxy (Caddy/nginx) — see
+      # Caddyfile.example + the "Exposing to the internet" section in README.
+      TRUST_PROXY: "${TRUST_PROXY:-}"
+      # Abuse limits: max body bytes, and per-link/min caps for the AI coach + data (sync/BP) routes.
+      BODY_LIMIT_BYTES: "${BODY_LIMIT_BYTES:-524288}"
+      COACH_MAX_PER_MIN: "${COACH_MAX_PER_MIN:-20}"
+      DATA_MAX_PER_MIN: "${DATA_MAX_PER_MIN:-120}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
       # Forgotten admin password: set FORGOT_PASSWORD=1 (+ optional ADMIN_RESET_PASSWORD) and restart.
       FORGOT_PASSWORD: "${FORGOT_PASSWORD:-}"

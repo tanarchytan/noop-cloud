@@ -5,7 +5,7 @@ import { db } from "../db.js";
 import * as auth from "../auth.js";
 import { SESSION_TTL } from "../auth.js";
 import * as ratelimit from "../ratelimit.js";
-import { currentUser } from "../security.js";
+import { currentUser, isRequestSecure } from "../security.js";
 import { log } from "../log.js";
 
 /** Web login / logout / session / password-change. */
@@ -31,7 +31,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
     ratelimit.recordSuccess(d, ip, "login");
     const token = auth.createSession(d, user.id);
-    reply.setCookie("sid", token, { path: "/", httpOnly: true, sameSite: "lax", maxAge: SESSION_TTL });
+    reply.setCookie("sid", token, {
+      path: "/", httpOnly: true, sameSite: "lax", secure: isRequestSecure(req), maxAge: SESSION_TTL,
+    });
     log.info("login.ok", { ip, user: user.username, is_admin: user.is_admin });
     return { ok: true, username: user.username, is_admin: user.is_admin, must_change: user.must_change };
   });

@@ -1,8 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { Type } from "@sinclair/typebox";
 
-import { checkLinkAccess } from "../security.js";
-import { AI_API_KEY, AI_BASE_URL, AI_MODEL, AI_SYSTEM_PROMPT } from "../config.js";
+import { db } from "../db.js";
+import * as ratelimit from "../ratelimit.js";
+import { accessLinkId, bearer, checkLinkAccess } from "../security.js";
+import { AI_API_KEY, AI_BASE_URL, AI_MODEL, AI_SYSTEM_PROMPT, COACH_MAX_PER_MIN } from "../config.js";
 
 /** The AI coach proxy — the cloud owns the system prompt + provider + model; universal OpenAI-compatible. */
 export async function coachRoutes(app: FastifyInstance): Promise<void> {
@@ -16,6 +18,14 @@ export async function coachRoutes(app: FastifyInstance): Promise<void> {
   }, async (req, reply) => {
     const access = checkLinkAccess(req);
     if (!access.ok) return reply.code(access.status!).send({ error: access.error });
+    // Per-link rate cap: a compromised or runaway client must not burn the AI key or turn this into an
+    // open OpenAI-compatible proxy.
+    const key = accessLinkId(bearer(req)) ?? req.ip;
+    const gate = ratelimit.throttle(db(), key, "coach", COACH_MAX_PER_MIN, 60);
+    if (!gate.allowed) {
+      return reply.code(429).header("Retry-After", gate.retryAfter)
+        .send({ error: `coach rate limit — try again in ${gate.retryAfter}s` });
+    }
     if (!AI_API_KEY) return reply.code(503).send({ error: "cloud AI not configured (set AI_API_KEY)" });
     const msgs = (req.body as { messages: unknown[] }).messages;
     if (!Array.isArray(msgs) || msgs.length === 0) return reply.code(400).send({ error: "messages[] required" });

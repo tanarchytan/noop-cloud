@@ -10,3 +10,8 @@ __pycache__/
 # Node
 node_modules/
 dist/
+
+# Stray local SQLite (the real store lives in the gitignored /data volume)
+*.db
+*.db-shm
+*.db-wal

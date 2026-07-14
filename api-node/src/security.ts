@@ -32,6 +32,38 @@ export function clientIsLoopback(req: FastifyRequest): boolean {
   return ip.startsWith("127.") || ip === "::1" || ip === "::ffff:127.0.0.1";
 }
 
+/** True when this request reached us over HTTPS — directly (TLS socket) or via a trusted proxy that
+ *  set X-Forwarded-Proto. Drives the Secure cookie flag and HSTS so neither breaks plain-http localhost
+ *  setup while still hardening the exposed https path. */
+export function isRequestSecure(req: FastifyRequest): boolean {
+  if ((req.raw.socket as { encrypted?: boolean }).encrypted === true) return true;
+  const xfp = req.headers["x-forwarded-proto"];
+  const proto = (Array.isArray(xfp) ? xfp[0] : xfp)?.split(",")[0]?.trim().toLowerCase();
+  return proto === "https";
+}
+
+/** Baseline response hardening applied to every reply (see the onRequest hook in server.ts). HSTS is
+ *  only asserted on secure responses; a relaxed CSP is skipped for the Swagger UI so /docs still works
+ *  for the admin. No user input is reflected into the server-rendered pages, so 'unsafe-inline' here is
+ *  a pragmatic allowance for their small inline scripts, not an XSS hole. */
+export function setSecurityHeaders(req: FastifyRequest, reply: FastifyReply): void {
+  reply.header("X-Content-Type-Options", "nosniff");
+  reply.header("X-Frame-Options", "DENY");
+  reply.header("Referrer-Policy", "no-referrer");
+  reply.header("Cross-Origin-Opener-Policy", "same-origin");
+  if (isRequestSecure(req)) {
+    reply.header("Strict-Transport-Security", "max-age=15552000; includeSubDomains");
+  }
+  if (!pathOf(req).startsWith("/docs")) {
+    reply.header(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
+        "img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; " +
+        "base-uri 'none'; object-src 'none'",
+    );
+  }
+}
+
 export function bearer(req: FastifyRequest): string | null {
   const h = req.headers.authorization ?? "";
   return h.startsWith("Bearer ") ? h.slice(7).trim() : null;

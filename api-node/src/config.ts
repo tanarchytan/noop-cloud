@@ -23,6 +23,16 @@ export const MTLS_REQUIRED = ["1", "true", "yes", "on"].includes((process.env.MT
 export const REQUIRE_CLIENT_ID =
   !["0", "false", "no", "off"].includes((process.env.REQUIRE_CLIENT_ID ?? "").toLowerCase());
 export const CLIENT_ID_HEADER = "x-noop-client-id";
+
+// Set TRUST_PROXY=1 ONLY when a reverse proxy (Caddy/nginx) sits in front and sets X-Forwarded-For /
+// -Proto — then req.ip is the real client (correct per-IP rate-limiting) and https is detected through
+// the proxy. Leave OFF for a direct port-forward, so a client can't spoof its IP via a header.
+export const TRUST_PROXY = ["1", "true", "yes", "on"].includes((process.env.TRUST_PROXY ?? "").toLowerCase());
+// Hard cap on request body size (bytes) — a linked client can't exhaust memory with a giant sync/PPG.
+export const BODY_LIMIT = Number(process.env.BODY_LIMIT_BYTES ?? String(512 * 1024));
+// Per-link (or per-IP) request-rate caps for the authed, cost-/CPU-bearing routes, per 60s window.
+export const COACH_MAX_PER_MIN = Number(process.env.COACH_MAX_PER_MIN ?? "20");
+export const DATA_MAX_PER_MIN = Number(process.env.DATA_MAX_PER_MIN ?? "120");
 export const CODE_TTL = Number(process.env.PAIR_CODE_TTL_SECONDS ?? "300");
 export const POLL_INTERVAL = Number(process.env.PAIR_POLL_INTERVAL_SECONDS ?? "3");
 export const FIRMWARE_JSON = process.env.FIRMWARE_JSON ?? "/firmware-data/firmware-latest.json";
@@ -34,12 +44,6 @@ export const AI_SYSTEM_PROMPT = process.env.AI_SYSTEM_PROMPT ??
   "You are a concise, evidence-based fitness and recovery coach for a wearable user. Ground every " +
   "answer in the numbers the user provides. Be practical and specific; never give medical advice or " +
   "diagnose. If data is missing, say so plainly.";
-
-/** Paths an UNCONFIGURED cloud (admin still on the default password) will serve — nothing else. */
-export const SETUP_PATHS = new Set([
-  "/", "/login", "/change", "/health", "/api/version",
-  "/api/login", "/api/logout", "/api/password", "/api/session",
-]);
 
 // Rotating pairing code: unambiguous alphabet (no 0/O/1/I) so it's easy to read off a screen.
 const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";

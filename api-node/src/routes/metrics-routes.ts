@@ -3,7 +3,9 @@ import { Type } from "@sinclair/typebox";
 
 import { db } from "../db.js";
 import * as metrics from "../metrics.js";
-import { checkLinkAccess, currentUser } from "../security.js";
+import * as ratelimit from "../ratelimit.js";
+import { accessLinkId, bearer, checkLinkAccess, currentUser } from "../security.js";
+import { DATA_MAX_PER_MIN } from "../config.js";
 import { log } from "../log.js";
 
 /** Metric sync (from the app) + read models (for the dashboard). */
@@ -14,6 +16,11 @@ export async function metricsRoutes(app: FastifyInstance): Promise<void> {
     // Written by the app: a paired-device access token OR a signed-in session (manual push/test).
     const access = checkLinkAccess(req);
     if (!access.ok) return reply.code(access.status!).send({ error: access.error });
+    const gate = ratelimit.throttle(db(), accessLinkId(bearer(req)) ?? req.ip, "data", DATA_MAX_PER_MIN, 60);
+    if (!gate.allowed) {
+      return reply.code(429).header("Retry-After", gate.retryAfter)
+        .send({ error: `sync rate limit — try again in ${gate.retryAfter}s` });
+    }
     const payload = req.body;
     if (typeof payload !== "object" || payload === null) return reply.code(400).send({ error: "JSON object body required" });
     const result = metrics.ingest(d, payload as never);

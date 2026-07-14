@@ -43,10 +43,15 @@ export interface IngestResult {
 }
 
 /** Upsert one sync payload: { days: [{day, recovery, ...}], hr: [{ts, bpm}] }. */
+// Defensive caps on one sync's array sizes — the body limit already bounds bytes; these bound rows so
+// a single call can't insert an unbounded number of DB records.
+const MAX_DAYS = 400; // > a year of daily rollups
+const MAX_HR = 5000;
+
 export function ingest(d: Database.Database, payload: { days?: DayPayload[]; hr?: unknown[] }): IngestResult {
   const t = now();
-  const days = payload.days ?? [];
-  const hr = payload.hr ?? [];
+  const days = (Array.isArray(payload.days) ? payload.days : []).slice(0, MAX_DAYS);
+  const hr = (Array.isArray(payload.hr) ? payload.hr : []).slice(0, MAX_HR);
   let nDays = 0;
 
   const upsert = d.prepare(
